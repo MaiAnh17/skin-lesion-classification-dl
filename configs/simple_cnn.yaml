@@ -1,0 +1,33 @@
+model:
+  name: simple_cnn
+  num_classes: 7
+  dropout: 0.5
+
+data:
+  image_size: 224
+  batch_size: 32
+  num_workers: 0
+
+training:
+  epochs: 30
+  learning_rate: 0.001
+  weight_decay: 0.0001
+
+optimizer:
+  name: adam
+
+loss:
+  name: weighted_cross_entropy
+  use_class_weights: true
+
+scheduler:
+  use_scheduler: true
+  name: reduce_lr_on_plateau
+  factor: 0.5
+  patience: 3
+
+early_stopping:
+  enabled: true
+  patience: 7
+
+seed: 42

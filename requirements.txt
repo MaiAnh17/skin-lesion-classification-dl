@@ -1,0 +1,33 @@
+# Core
+numpy
+pandas
+scikit-learn
+
+# Deep Learning - PyTorch
+torch
+torchvision
+torchaudio
+
+# Image Processing
+Pillow
+opencv-python
+
+# Data Augmentation
+albumentations
+
+# Visualization
+matplotlib
+seaborn
+
+# Jupyter Notebook
+jupyter
+ipykernel
+
+# Progress Bar
+tqdm
+
+# Configuration
+PyYAML
+
+# Evaluation
+scipy

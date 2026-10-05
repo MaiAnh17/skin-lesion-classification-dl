@@ -1,0 +1,58 @@
+model:
+  name: complex_cnn
+  num_classes: 7
+
+  channels:
+    - 32
+    - 64
+    - 128
+    - 256
+
+  block_dropout:
+    - 0.10
+    - 0.15
+    - 0.20
+    - 0.25
+
+  classifier_dropout: 0.5
+
+  adaptive_pool_size:
+    - 2
+    - 2
+
+
+data:
+  image_size: 224
+  batch_size: 32
+  num_workers: 0
+
+
+training:
+  seed: 42
+  epochs: 30
+
+  optimizer:
+    name: adam
+    learning_rate: 0.001
+    weight_decay: 0.0001
+
+  scheduler:
+    name: reduce_lr_on_plateau
+    mode: min
+    factor: 0.5
+    patience: 3
+
+  early_stopping:
+    patience: 7
+
+
+loss:
+  name: weighted_cross_entropy
+  use_class_weights: true
+
+
+output:
+  checkpoint_name: complex_cnn_best.pt
+  history_name: complex_cnn_training_history.csv
+  loss_figure_name: complex_cnn_loss_curve.png
+  accuracy_figure_name: complex_cnn_accuracy_curve.png
