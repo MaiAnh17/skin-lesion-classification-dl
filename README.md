@@ -4,33 +4,6 @@
 Deep learning project for multi-class skin lesion classification
 using the HAM10000 dataset.
 
-## Project Pipeline
-
-HAM10000 Dataset
-↓
-Data Understanding
-↓
-Data Cleaning
-↓
-Patient-aware Train / Validation / Test Split
-↓
-Preprocessing + Normalization
-↓
-Data Augmentation (TRAIN only)
-↓
-Simple CNN
-↓
-Complex CNN
-↓
-Transfer Learning
-↓
-Fine-Tuned Transfer Learning
-↓
-Test-set Evaluation
-↓
-Model Comparison + Error Analysis
-↓
-Conclusion
 
 ## Team Responsibilities
 
