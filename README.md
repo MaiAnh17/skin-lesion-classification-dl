@@ -424,8 +424,46 @@ This analysis provides additional insight beyond aggregate evaluation metrics.
 
 # 15. Repository Structure
 
-```text
 
+```text
+skin-lesion-classification/
+│
+├── configs/
+│   ├── simple_cnn.yaml
+│   ├── complex_cnn.yaml
+│   ├── transfer.yaml
+│   ├── fine_tuning.yaml
+│   ├── evaluation.yaml
+│   └── error_analysis.yaml
+│
+├── data/
+│   ├── README.md
+│   ├── raw/
+│   └── processed/
+│
+├── notebooks/
+│   ├── 01_data_understanding.ipynb
+│   ├── 02_data_cleaning.ipynb
+│   ├── 03_data_split.ipynb
+│   ├── 04_preprocessing_augmentation.ipynb
+│   ├── 05_simple_cnn.ipynb
+│   ├── 06_complex_cnn.ipynb
+│   ├── 07_transfer_learning.ipynb
+│   ├── 08_fine_tuning.ipynb
+│   ├── 09_evaluation.ipynb
+│   └── 10_error_analysis.ipynb
+│
+├── src/
+│   ├── data/
+│   ├── models/
+│   ├── training/
+│   └── evaluation/
+│
+├── scripts/
+├── tests/
+├── outputs/
+├── requirements.txt
+└── README.md
 ```
 
 The repository separates exploratory notebooks from reusable Python modules to make experiments easier to reproduce and maintain.
