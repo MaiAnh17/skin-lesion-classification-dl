@@ -495,7 +495,7 @@ The main technologies used in this project include:
 Clone the repository:
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/MaiAnh17/skin-lesion-classification.git
 cd skin-lesion-classification
 ```
 
@@ -527,6 +527,9 @@ After downloading the dataset, place the original files inside:
 
 ```text
 data/raw/
+├── HAM10000_metadata.csv
+├── HAM10000_images_part_1/
+└── HAM10000_images_part_2/
 ```
 
 The expected structure should contain the metadata file and HAM10000 image folders.
