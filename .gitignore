@@ -39,6 +39,7 @@ data/processed/*
 # Trained Models / Checkpoints
 # ============================================================
 
+# Ignore all checkpoint/model files by default
 outputs/checkpoints/*
 *.pth
 *.pt
@@ -49,6 +50,12 @@ outputs/checkpoints/*
 
 # Keep checkpoint folder structure
 !outputs/checkpoints/.gitkeep
+
+# Keep the 4 final best checkpoints
+!outputs/checkpoints/simple_cnn_best.pt
+!outputs/checkpoints/complex_cnn_best.pt
+!outputs/checkpoints/transfer_resnet18_best.pt
+!outputs/checkpoints/fine_tuned_resnet18_best.pt
 
 # ============================================================
 # Generated Results
