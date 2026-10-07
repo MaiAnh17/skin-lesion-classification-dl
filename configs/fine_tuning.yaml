@@ -1,0 +1,58 @@
+experiment:
+  name: fine_tuned_resnet18
+  seed: 42
+
+data:
+  image_size: 224
+  batch_size: 32
+  num_workers: 0
+  num_classes: 7
+
+model:
+  name: resnet18
+  pretrained: true
+  dropout: 0.3
+  checkpoint: outputs/checkpoints/transfer_resnet18_best.pt
+
+fine_tuning:
+  strategy: progressive
+
+  frozen_modules:
+    - conv1
+    - bn1
+    - layer1
+    - layer2
+    - layer3
+
+  trainable_modules:
+    - layer4
+    - fc
+
+loss:
+  name: weighted_cross_entropy
+  class_weight_strategy: sqrt_inverse_frequency
+  label_smoothing: 0.05
+
+optimizer:
+  name: AdamW
+  backbone_lr: 0.00001
+  classifier_lr: 0.0001
+  weight_decay: 0.0001
+
+scheduler:
+  name: ReduceLROnPlateau
+  mode: min
+  factor: 0.5
+  patience: 2
+  min_lr: 0.0000001
+
+training:
+  epochs: 15
+  early_stopping_patience: 5
+  monitor: val_loss
+
+outputs:
+  checkpoint: outputs/checkpoints/fine_tuned_resnet18_best.pt
+  history: outputs/metrics/fine_tuned_resnet18_training_history.csv
+  loss_figure: outputs/figures/fine_tuned_resnet18_loss_curve.png
+  accuracy_figure: outputs/figures/fine_tuned_resnet18_accuracy_curve.png
