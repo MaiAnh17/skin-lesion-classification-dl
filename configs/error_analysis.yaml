@@ -1,0 +1,18 @@
+seed: 42
+image_size: 224
+batch_size: 32
+num_workers: 0
+classes: [akiec, bcc, bkl, df, mel, nv, vasc]
+thresholds:
+  high_confidence_error: 0.80
+  low_confidence_prediction: 0.50
+paths:
+  test_csv: data/processed/test.csv
+  checkpoint_dir: outputs/checkpoints
+  output_tables_dir: outputs/error_analysis/tables
+  output_figures_dir: outputs/error_analysis/figures
+checkpoints:
+  Simple CNN: simple_cnn_best.pt
+  Complex CNN: complex_cnn_best.pt
+  Transfer Learning ResNet18: transfer_resnet18_best.pt
+  Fine-tuned ResNet18: fine_tuned_resnet18_best.pt

@@ -9,16 +9,16 @@ model:
     - 256
 
   block_dropout:
-    - 0.10
-    - 0.15
-    - 0.20
-    - 0.25
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
 
-  classifier_dropout: 0.5
+  classifier_dropout: 0.4
 
   adaptive_pool_size:
-    - 2
-    - 2
+    - 4
+    - 4
 
 
 data:

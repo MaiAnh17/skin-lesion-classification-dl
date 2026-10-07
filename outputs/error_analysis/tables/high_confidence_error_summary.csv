@@ -1,0 +1,5 @@
+model,high_confidence_errors,total_errors,share
+Simple CNN,13,600,0.021666666666666667
+Complex CNN,13,415,0.03132530120481928
+Transfer Learning ResNet18,3,388,0.007731958762886598
+Fine-tuned ResNet18,19,347,0.05475504322766571

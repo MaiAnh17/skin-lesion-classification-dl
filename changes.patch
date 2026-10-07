@@ -1,0 +1,631 @@
+diff --git a/configs/complex_cnn.yaml b/configs/complex_cnn.yaml
+index 0179aee..5e0e455 100644
+--- a/configs/complex_cnn.yaml
++++ b/configs/complex_cnn.yaml
+@@ -9,16 +9,16 @@ model:
+     - 256
+ 
+   block_dropout:
+-    - 0.10
+-    - 0.15
+-    - 0.20
+-    - 0.25
++    - 0.0
++    - 0.0
++    - 0.0
++    - 0.0
+ 
+-  classifier_dropout: 0.5
++  classifier_dropout: 0.4
+ 
+   adaptive_pool_size:
+-    - 2
+-    - 2
++    - 4
++    - 4
+ 
+ 
+ data:
+diff --git a/scripts/evaluate_models.py b/scripts/evaluate_models.py
+new file mode 100644
+index 0000000..7d22072
+--- /dev/null
++++ b/scripts/evaluate_models.py
+@@ -0,0 +1,95 @@
++import sys
++from pathlib import Path
++import pandas as pd
++import numpy as np
++import torch
++from torch.utils.data import DataLoader
++from sklearn.metrics import classification_report, accuracy_score, f1_score
++
++PROJECT_ROOT = Path(__file__).resolve().parent.parent
++if str(PROJECT_ROOT) not in sys.path:
++    sys.path.insert(0, str(PROJECT_ROOT))
++
++import torch_directml
++from src.data.dataset import HAM10000Dataset, HAM10000_CLASSES
++from src.data.preprocessing import get_eval_transform
++from src.models.simple_cnn import SimpleCNN
++from src.models.complex_cnn import ComplexCNN
++from src.models.transfer_learning import TransferLearningResNet18
++
++
++def evaluate(model, loader, device):
++    model.eval()
++    all_preds = []
++    all_targets = []
++    with torch.no_grad():
++        for x, y in loader:
++            x = x.to(device)
++            preds = model(x).argmax(dim=1).cpu().numpy()
++            all_preds.extend(preds)
++            all_targets.extend(y.numpy())
++    acc = accuracy_score(all_targets, all_preds)
++    macro_f1 = f1_score(all_targets, all_preds, average="macro", zero_division=0)
++    weighted_f1 = f1_score(all_targets, all_preds, average="weighted", zero_division=0)
++    return acc, macro_f1, weighted_f1, all_targets, all_preds
++
++
++def main():
++    torch.set_num_threads(14)
++    device = torch_directml.device()
++    test_df = pd.read_csv(PROJECT_ROOT / "data" / "processed" / "test.csv")
++    eval_transform = get_eval_transform(image_size=224)
++    test_dataset = HAM10000Dataset(test_df, PROJECT_ROOT, transform=eval_transform)
++    test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False, num_workers=4)
++
++    checkpoints_dir = PROJECT_ROOT / "outputs" / "checkpoints"
++
++    results = []
++
++    # 1. Simple CNN
++    p = checkpoints_dir / "simple_cnn_best.pt"
++    if p.exists():
++        m = SimpleCNN(num_classes=7)
++        state = torch.load(p, map_location="cpu", weights_only=False)
++        m.load_state_dict(state)
++        m.to(device)
++        acc, mf1, wf1, _, _ = evaluate(m, test_loader, device)
++        results.append({"Model": "Simple CNN", "Accuracy": acc, "Macro F1": mf1, "Weighted F1": wf1})
++
++    # 2. Refined Complex CNN
++    p = checkpoints_dir / "complex_cnn_refined_best.pt"
++    if p.exists():
++        m = ComplexCNN(num_classes=7)
++        state = torch.load(p, map_location="cpu", weights_only=False)
++        m.load_state_dict(state)
++        m.to(device)
++        acc, mf1, wf1, _, _ = evaluate(m, test_loader, device)
++        results.append({"Model": "Complex CNN (Refined)", "Accuracy": acc, "Macro F1": mf1, "Weighted F1": wf1})
++
++    # 3. Refined Transfer Learning
++    p = checkpoints_dir / "transfer_resnet18_refined_best.pt"
++    if p.exists():
++        m = TransferLearningResNet18(num_classes=7, hidden_dim=256)
++        state = torch.load(p, map_location="cpu", weights_only=False)
++        m.load_state_dict(state)
++        m.to(device)
++        acc, mf1, wf1, _, _ = evaluate(m, test_loader, device)
++        results.append({"Model": "Transfer Learning (Refined)", "Accuracy": acc, "Macro F1": mf1, "Weighted F1": wf1})
++
++    # 4. Fine-Tuned ResNet-18
++    p = checkpoints_dir / "fine_tuned_resnet18_best.pt"
++    if p.exists():
++        m = TransferLearningResNet18(num_classes=7, hidden_dim=None)
++        state = torch.load(p, map_location="cpu", weights_only=False)
++        m.load_state_dict(state)
++        m.to(device)
++        acc, mf1, wf1, targets, preds = evaluate(m, test_loader, device)
++        results.append({"Model": "Fine-Tuning ResNet-18", "Accuracy": acc, "Macro F1": mf1, "Weighted F1": wf1})
++
++    df = pd.DataFrame(results)
++    print("\n--- Final Test Set Summary Across All Models ---", flush=True)
++    print(df.to_string(index=False), flush=True)
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/scripts/train_complex_cnn.py b/scripts/train_complex_cnn.py
+index e69de29..84ae3bc 100644
+--- a/scripts/train_complex_cnn.py
++++ b/scripts/train_complex_cnn.py
+@@ -0,0 +1,131 @@
++import sys
++from pathlib import Path
++import random
++import numpy as np
++import pandas as pd
++import torch
++from torch.utils.data import DataLoader
++
++PROJECT_ROOT = Path(__file__).resolve().parent.parent
++if str(PROJECT_ROOT) not in sys.path:
++    sys.path.insert(0, str(PROJECT_ROOT))
++
++import torch_directml
++from src.data.dataset import HAM10000Dataset, HAM10000_CLASSES
++from src.data.preprocessing import get_eval_transform
++from src.data.augmentation import get_train_transform
++from src.models.complex_cnn import ComplexCNN
++from src.training.losses import compute_class_weights, get_weighted_cross_entropy_loss
++from src.training.train import fit, evaluate_one_epoch
++
++def main():
++    # 1. Reproducibility & Threads
++    SEED = 42
++    random.seed(SEED)
++    np.random.seed(SEED)
++    torch.manual_seed(SEED)
++    torch.set_num_threads(14)
++
++    # 2. Device: DirectML (RX 6700 XT)
++    dml = torch_directml.device()
++    gpu_name = torch_directml.device_name(0)
++    print(f"Device: DirectML on {gpu_name}")
++    print(f"CPU threads for data/host: {torch.get_num_threads()}")
++
++    # 3. Paths
++    data_dir = PROJECT_ROOT / "data" / "processed"
++    checkpoints_dir = PROJECT_ROOT / "outputs" / "checkpoints"
++    metrics_dir = PROJECT_ROOT / "outputs" / "metrics"
++    checkpoints_dir.mkdir(parents=True, exist_ok=True)
++    metrics_dir.mkdir(parents=True, exist_ok=True)
++
++    train_df = pd.read_csv(data_dir / "train.csv")
++    val_df = pd.read_csv(data_dir / "val.csv")
++    test_df = pd.read_csv(data_dir / "test.csv")
++    print(f"Splits loaded: Train={len(train_df)}, Val={len(val_df)}, Test={len(test_df)}")
++
++    # 4. Transforms and DataLoaders
++    train_transform = get_train_transform(image_size=224)
++    eval_transform = get_eval_transform(image_size=224)
++
++    train_dataset = HAM10000Dataset(train_df, PROJECT_ROOT, transform=train_transform)
++    val_dataset = HAM10000Dataset(val_df, PROJECT_ROOT, transform=eval_transform)
++    test_dataset = HAM10000Dataset(test_df, PROJECT_ROOT, transform=eval_transform)
++
++    train_loader = DataLoader(
++        train_dataset,
++        batch_size=32,
++        shuffle=True,
++        num_workers=4,
++    )
++    val_loader = DataLoader(
++        val_dataset,
++        batch_size=32,
++        shuffle=False,
++        num_workers=4,
++    )
++    test_loader = DataLoader(
++        test_dataset,
++        batch_size=32,
++        shuffle=False,
++        num_workers=4,
++    )
++
++    # 5. Model: Refined Complex CNN (Fix A)
++    # - Removed cascading Dropout2d from conv blocks
++    # - Pool size changed to (4, 4) to preserve spatial features
++    # - Dropout in FC head set to 0.4
++    model = ComplexCNN(
++        num_classes=7,
++        dropout=0.4,
++        block_dropout=[0.0, 0.0, 0.0, 0.0],
++        adaptive_pool_size=(4, 4),
++    ).to(dml)
++
++    total_params = sum(p.numel() for p in model.parameters())
++    print(f"Model parameters: {total_params:,}")
++
++    # 6. Loss: Smoothed inverse class weights + label smoothing
++    raw_weights = compute_class_weights(train_df, HAM10000_CLASSES, device=dml)
++    criterion = get_weighted_cross_entropy_loss(raw_weights, label_smoothing=0.05, soften=True)
++
++    optimizer = torch.optim.Adam(
++        model.parameters(),
++        lr=0.001,
++        weight_decay=1e-4,
++    )
++    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
++        optimizer,
++        mode="min",
++        factor=0.5,
++        patience=3,
++    )
++
++    checkpoint_path = checkpoints_dir / "complex_cnn_refined_best.pt"
++    history_path = metrics_dir / "complex_cnn_refined_history.csv"
++
++    print("\nStarting training for Refined Complex CNN (Fix A)...")
++    history_df = fit(
++        model=model,
++        train_loader=train_loader,
++        val_loader=val_loader,
++        criterion=criterion,
++        optimizer=optimizer,
++        device=dml,
++        num_epochs=25,
++        checkpoint_path=checkpoint_path,
++        scheduler=scheduler,
++        early_stopping_patience=7,
++        history_path=history_path,
++    )
++
++    # 7. Evaluate Best Model on Test Set
++    print("\nLoading best model for test evaluation...")
++    model.load_state_dict(torch.load(checkpoint_path, map_location=dml))
++    test_loss, test_acc = evaluate_one_epoch(model, test_loader, criterion, dml)
++    print(f"\nFinal Test Evaluation:")
++    print(f"Test Loss: {test_loss:.4f}")
++    print(f"Test Accuracy: {test_acc:.4f} ({test_acc * 100:.2f}%)")
++
++if __name__ == "__main__":
++    main()
+diff --git a/scripts/train_transfer.py b/scripts/train_transfer.py
+index e69de29..bf09b21 100644
+--- a/scripts/train_transfer.py
++++ b/scripts/train_transfer.py
+@@ -0,0 +1,128 @@
++import sys
++from pathlib import Path
++import random
++import numpy as np
++import pandas as pd
++import torch
++from torch.utils.data import DataLoader
++
++if hasattr(sys.stdout, "reconfigure"):
++    sys.stdout.reconfigure(line_buffering=True)
++
++PROJECT_ROOT = Path(__file__).resolve().parent.parent
++if str(PROJECT_ROOT) not in sys.path:
++    sys.path.insert(0, str(PROJECT_ROOT))
++
++import torch_directml
++from src.data.dataset import HAM10000Dataset, HAM10000_CLASSES
++from src.data.preprocessing import get_eval_transform
++from src.data.augmentation import get_train_transform
++from src.models.transfer_learning import TransferLearningResNet18
++from src.training.losses import compute_class_weights, get_weighted_cross_entropy_loss
++from src.training.train import fit, evaluate_one_epoch
++
++def main():
++    SEED = 42
++    random.seed(SEED)
++    np.random.seed(SEED)
++    torch.manual_seed(SEED)
++    torch.set_num_threads(14)
++
++    dml = torch_directml.device()
++    gpu_name = torch_directml.device_name(0)
++    print(f"Device: DirectML on {gpu_name}", flush=True)
++    print(f"Host CPU threads: {torch.get_num_threads()}", flush=True)
++
++    data_dir = PROJECT_ROOT / "data" / "processed"
++    checkpoints_dir = PROJECT_ROOT / "outputs" / "checkpoints"
++    metrics_dir = PROJECT_ROOT / "outputs" / "metrics"
++    checkpoints_dir.mkdir(parents=True, exist_ok=True)
++    metrics_dir.mkdir(parents=True, exist_ok=True)
++
++    train_df = pd.read_csv(data_dir / "train.csv")
++    val_df = pd.read_csv(data_dir / "val.csv")
++    test_df = pd.read_csv(data_dir / "test.csv")
++    print(f"Splits: Train={len(train_df)}, Val={len(val_df)}, Test={len(test_df)}", flush=True)
++
++    train_transform = get_train_transform(image_size=224)
++    eval_transform = get_eval_transform(image_size=224)
++
++    train_dataset = HAM10000Dataset(train_df, PROJECT_ROOT, transform=train_transform)
++    val_dataset = HAM10000Dataset(val_df, PROJECT_ROOT, transform=eval_transform)
++    test_dataset = HAM10000Dataset(test_df, PROJECT_ROOT, transform=eval_transform)
++
++    train_loader = DataLoader(
++        train_dataset,
++        batch_size=32,
++        shuffle=True,
++        num_workers=4,
++    )
++    val_loader = DataLoader(
++        val_dataset,
++        batch_size=32,
++        shuffle=False,
++        num_workers=4,
++    )
++    test_loader = DataLoader(
++        test_dataset,
++        batch_size=32,
++        shuffle=False,
++        num_workers=4,
++    )
++
++    # Transfer Learning ResNet-18 (Backbone frozen, trainable linear probe)
++    model = TransferLearningResNet18(
++        num_classes=7,
++        dropout=0.3,
++        pretrained=True,
++        freeze_backbone=True,
++        hidden_dim=256,
++    ).to(dml)
++
++    total_params = sum(p.numel() for p in model.parameters())
++    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
++    print(f"Total parameters: {total_params:,} | Trainable: {trainable_params:,}", flush=True)
++
++    # Softened class weights matching fine-tuning
++    raw_weights = compute_class_weights(train_df, HAM10000_CLASSES, device=dml)
++    criterion = get_weighted_cross_entropy_loss(raw_weights, label_smoothing=0.05, soften=True)
++
++    optimizer = torch.optim.Adam(
++        filter(lambda p: p.requires_grad, model.parameters()),
++        lr=0.001,
++        weight_decay=1e-4,
++    )
++    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
++        optimizer,
++        mode="min",
++        factor=0.5,
++        patience=2,
++    )
++
++    checkpoint_path = checkpoints_dir / "transfer_resnet18_refined_best.pt"
++    history_path = metrics_dir / "transfer_resnet18_refined_history.csv"
++
++    print("\nStarting training for Refined Transfer Learning ResNet-18...", flush=True)
++    history_df = fit(
++        model=model,
++        train_loader=train_loader,
++        val_loader=val_loader,
++        criterion=criterion,
++        optimizer=optimizer,
++        device=dml,
++        num_epochs=20,
++        checkpoint_path=checkpoint_path,
++        scheduler=scheduler,
++        early_stopping_patience=6,
++        history_path=history_path,
++    )
++
++    print("\nLoading best model for test evaluation...", flush=True)
++    model.load_state_dict(torch.load(checkpoint_path, map_location=dml, weights_only=False))
++    test_loss, test_acc = evaluate_one_epoch(model, test_loader, criterion, dml)
++    print(f"\nFinal Test Evaluation:", flush=True)
++    print(f"Test Loss: {test_loss:.4f}", flush=True)
++    print(f"Test Accuracy: {test_acc:.4f} ({test_acc * 100:.2f}%)", flush=True)
++
++if __name__ == "__main__":
++    main()
+diff --git a/src/models/complex_cnn.py b/src/models/complex_cnn.py
+index 1336342..b6cca06 100644
+--- a/src/models/complex_cnn.py
++++ b/src/models/complex_cnn.py
+@@ -84,11 +84,16 @@ class ComplexCNN(nn.Module):
+ 
+     def __init__(
+         self,
+-        num_classes=7,
+-        dropout=0.5,
++        num_classes: int = 7,
++        dropout: float = 0.4,
++        block_dropout: list[float] | None = None,
++        adaptive_pool_size: tuple[int, int] = (4, 4),
+     ):
+         super().__init__()
+ 
++        if block_dropout is None:
++            block_dropout = [0.0, 0.0, 0.0, 0.0]
++
+         # Feature extraction
+         self.features = nn.Sequential(
+ 
+@@ -97,47 +102,45 @@ class ComplexCNN(nn.Module):
+             CNNBlock(
+                 in_channels=3,
+                 out_channels=32,
+-                dropout=0.10,
++                dropout=block_dropout[0],
+             ),
+ 
+             # Output: 64 x 56 x 56
+             CNNBlock(
+                 in_channels=32,
+                 out_channels=64,
+-                dropout=0.15,
++                dropout=block_dropout[1],
+             ),
+ 
+             # Output: 128 x 28 x 28
+             CNNBlock(
+                 in_channels=64,
+                 out_channels=128,
+-                dropout=0.20,
++                dropout=block_dropout[2],
+             ),
+ 
+             # Output: 256 x 14 x 14
+             CNNBlock(
+                 in_channels=128,
+                 out_channels=256,
+-                dropout=0.25,
++                dropout=block_dropout[3],
+             ),
+         )
+ 
+-        # Reduce feature map:
+-        # 256 x 14 x 14
+-        # ->
+-        # 256 x 2 x 2
++        self.adaptive_pool_size = adaptive_pool_size
+         self.avgpool = nn.AdaptiveAvgPool2d(
+-            (2, 2)
++            adaptive_pool_size
+         )
+ 
++        flatten_dim = 256 * adaptive_pool_size[0] * adaptive_pool_size[1]
++
+         # Classification head
+         self.classifier = nn.Sequential(
+ 
+             nn.Flatten(),
+ 
+-            # 256 * 2 * 2 = 1024
+             nn.Linear(
+-                256 * 2 * 2,
++                flatten_dim,
+                 256,
+             ),
+ 
+diff --git a/src/models/transfer_learning.py b/src/models/transfer_learning.py
+index cd8f5e4..319a113 100644
+--- a/src/models/transfer_learning.py
++++ b/src/models/transfer_learning.py
+@@ -18,6 +18,7 @@ class TransferLearningResNet18(nn.Module):
+         dropout: float = 0.3,
+         pretrained: bool = True,
+         freeze_backbone: bool = True,
++        hidden_dim: int | None = 256,
+     ) -> None:
+         super().__init__()
+ 
+@@ -26,10 +27,18 @@ class TransferLearningResNet18(nn.Module):
+ 
+         in_features = self.backbone.fc.in_features  # 512
+ 
+-        self.backbone.fc = nn.Sequential(
+-            nn.Dropout(p=dropout),
+-            nn.Linear(in_features, num_classes),
+-        )
++        if hidden_dim is not None and hidden_dim > 0:
++            self.backbone.fc = nn.Sequential(
++                nn.Linear(in_features, hidden_dim),
++                nn.ReLU(inplace=True),
++                nn.Dropout(p=dropout),
++                nn.Linear(hidden_dim, num_classes),
++            )
++        else:
++            self.backbone.fc = nn.Sequential(
++                nn.Dropout(p=dropout),
++                nn.Linear(in_features, num_classes),
++            )
+ 
+         if freeze_backbone:
+             self.freeze_backbone()
+@@ -57,3 +66,27 @@ class TransferLearningResNet18(nn.Module):
+         """Unfreeze the complete network for full fine-tuning."""
+         for parameter in self.backbone.parameters():
+             parameter.requires_grad = True
++
++    def load_state_dict(self, state_dict, strict: bool = True, assign: bool = False):
++        """Load state dict, dynamically adapting the FC head structure if necessary."""
++        has_2layer = any("fc.3." in k for k in state_dict.keys())
++        has_1layer = any("fc.1." in k for k in state_dict.keys())
++        in_features = self.backbone.fc[0].in_features if isinstance(self.backbone.fc[0], nn.Linear) else 512
++
++        if has_2layer and not isinstance(self.backbone.fc[0], nn.Linear):
++            out_dim = state_dict[[k for k in state_dict if "fc.0.weight" in k][0]].shape[0]
++            num_classes = state_dict[[k for k in state_dict if "fc.3.weight" in k][0]].shape[0]
++            self.backbone.fc = nn.Sequential(
++                nn.Linear(in_features, out_dim),
++                nn.ReLU(inplace=True),
++                nn.Dropout(p=0.3),
++                nn.Linear(out_dim, num_classes),
++            )
++        elif has_1layer and isinstance(self.backbone.fc[0], nn.Linear):
++            num_classes = state_dict[[k for k in state_dict if "fc.1.weight" in k][0]].shape[0]
++            self.backbone.fc = nn.Sequential(
++                nn.Dropout(p=0.3),
++                nn.Linear(in_features, num_classes),
++            )
++
++        return super().load_state_dict(state_dict, strict=strict, assign=assign)
+diff --git a/src/training/losses.py b/src/training/losses.py
+index 9fc9ded..5774bc6 100644
+--- a/src/training/losses.py
++++ b/src/training/losses.py
+@@ -57,11 +57,17 @@ def compute_class_weights(
+ 
+ def get_weighted_cross_entropy_loss(
+     class_weights,
++    label_smoothing: float = 0.0,
++    soften: bool = False,
+ ):
+     """
+     Weighted CrossEntropyLoss for imbalanced classification.
++    Optionally softens weights via square root and adds label smoothing.
+     """
++    if soften:
++        class_weights = torch.sqrt(class_weights)
+ 
+     return nn.CrossEntropyLoss(
+-        weight=class_weights
++        weight=class_weights,
++        label_smoothing=label_smoothing,
+     )
+\ No newline at end of file
+diff --git a/src/training/train.py b/src/training/train.py
+index 9621cb1..6761e9c 100644
+--- a/src/training/train.py
++++ b/src/training/train.py
+@@ -15,6 +15,7 @@ def train_one_epoch(
+     criterion,
+     optimizer,
+     device,
++    print_freq: int = 50,
+ ):
+     """
+     Train model for one epoch.
+@@ -25,8 +26,9 @@ def train_one_epoch(
+     running_loss = 0.0
+     correct = 0
+     total = 0
++    total_batches = len(dataloader)
+ 
+-    for images, labels in dataloader:
++    for batch_idx, (images, labels) in enumerate(dataloader, 1):
+ 
+         images = images.to(
+             device,
+@@ -70,6 +72,14 @@ def train_one_epoch(
+ 
+         total += batch_size
+ 
++        if print_freq > 0 and (batch_idx % print_freq == 0 or batch_idx == total_batches):
++            print(
++                f"  [Batch {batch_idx:3d}/{total_batches}] "
++                f"Loss: {running_loss / total:.4f} | "
++                f"Acc: {correct / total:.4f} ({correct / total * 100:.1f}%)",
++                flush=True,
++            )
++
+     epoch_loss = (
+         running_loss / total
+     )
+@@ -198,6 +208,7 @@ def fit(
+         1,
+         num_epochs + 1,
+     ):
++        print(f"\n--- Epoch {epoch:02d}/{num_epochs} ---", flush=True)
+ 
+         train_loss, train_acc = (
+             train_one_epoch(
+@@ -253,7 +264,8 @@ def fit(
+             f"Train Acc: {train_acc:.4f} | "
+             f"Val Loss: {val_loss:.4f} | "
+             f"Val Acc: {val_acc:.4f} | "
+-            f"LR: {current_lr:.6f}"
++            f"LR: {current_lr:.6f}",
++            flush=True,
+         )
+ 
+         improved = early_stopping.step(
+@@ -268,7 +280,8 @@ def fit(
+             )
+ 
+             print(
+-                "  -> Best model saved."
++                "  -> Best model saved.",
++                flush=True,
+             )
+ 
+         if scheduler is not None:

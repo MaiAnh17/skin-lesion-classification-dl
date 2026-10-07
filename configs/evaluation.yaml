@@ -1,0 +1,36 @@
+seed: 42
+
+data:
+  test_csv: data/processed/test.csv
+  raw_dir: data/raw
+  image_size: 224
+  batch_size: 32
+  num_workers: 0
+
+classes:
+  class_to_idx:
+    akiec: 0
+    bcc: 1
+    bkl: 2
+    df: 3
+    mel: 4
+    nv: 5
+    vasc: 6
+
+models:
+  simple_cnn:
+    checkpoint: outputs/checkpoints/simple_cnn_best.pt
+
+  complex_cnn:
+    checkpoint: outputs/checkpoints/complex_cnn_best.pt
+
+  transfer_resnet18:
+    checkpoint: outputs/checkpoints/transfer_resnet18_best.pt
+
+  fine_tuned_resnet18:
+    checkpoint: outputs/checkpoints/fine_tuned_resnet18_best.pt
+
+outputs:
+  metrics_dir: outputs/metrics
+  figures_dir: outputs/figures
+  confusion_dir: outputs/confusion_matrices

@@ -15,6 +15,7 @@ def train_one_epoch(
     criterion,
     optimizer,
     device,
+    print_freq: int = 50,
 ):
     """
     Train model for one epoch.
@@ -25,8 +26,9 @@ def train_one_epoch(
     running_loss = 0.0
     correct = 0
     total = 0
+    total_batches = len(dataloader)
 
-    for images, labels in dataloader:
+    for batch_idx, (images, labels) in enumerate(dataloader, 1):
 
         images = images.to(
             device,
@@ -69,6 +71,14 @@ def train_one_epoch(
         ).sum().item()
 
         total += batch_size
+
+        if print_freq > 0 and (batch_idx % print_freq == 0 or batch_idx == total_batches):
+            print(
+                f"  [Batch {batch_idx:3d}/{total_batches}] "
+                f"Loss: {running_loss / total:.4f} | "
+                f"Acc: {correct / total:.4f} ({correct / total * 100:.1f}%)",
+                flush=True,
+            )
 
     epoch_loss = (
         running_loss / total
@@ -198,6 +208,7 @@ def fit(
         1,
         num_epochs + 1,
     ):
+        print(f"\n--- Epoch {epoch:02d}/{num_epochs} ---", flush=True)
 
         train_loss, train_acc = (
             train_one_epoch(
@@ -253,7 +264,8 @@ def fit(
             f"Train Acc: {train_acc:.4f} | "
             f"Val Loss: {val_loss:.4f} | "
             f"Val Acc: {val_acc:.4f} | "
-            f"LR: {current_lr:.6f}"
+            f"LR: {current_lr:.6f}",
+            flush=True,
         )
 
         improved = early_stopping.step(
@@ -268,7 +280,8 @@ def fit(
             )
 
             print(
-                "  -> Best model saved."
+                "  -> Best model saved.",
+                flush=True,
             )
 
         if scheduler is not None:

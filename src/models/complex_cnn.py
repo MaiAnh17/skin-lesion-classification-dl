@@ -84,10 +84,15 @@ class ComplexCNN(nn.Module):
 
     def __init__(
         self,
-        num_classes=7,
-        dropout=0.5,
+        num_classes: int = 7,
+        dropout: float = 0.4,
+        block_dropout: list[float] | None = None,
+        adaptive_pool_size: tuple[int, int] = (4, 4),
     ):
         super().__init__()
+
+        if block_dropout is None:
+            block_dropout = [0.0, 0.0, 0.0, 0.0]
 
         # Feature extraction
         self.features = nn.Sequential(
@@ -97,47 +102,45 @@ class ComplexCNN(nn.Module):
             CNNBlock(
                 in_channels=3,
                 out_channels=32,
-                dropout=0.10,
+                dropout=block_dropout[0],
             ),
 
             # Output: 64 x 56 x 56
             CNNBlock(
                 in_channels=32,
                 out_channels=64,
-                dropout=0.15,
+                dropout=block_dropout[1],
             ),
 
             # Output: 128 x 28 x 28
             CNNBlock(
                 in_channels=64,
                 out_channels=128,
-                dropout=0.20,
+                dropout=block_dropout[2],
             ),
 
             # Output: 256 x 14 x 14
             CNNBlock(
                 in_channels=128,
                 out_channels=256,
-                dropout=0.25,
+                dropout=block_dropout[3],
             ),
         )
 
-        # Reduce feature map:
-        # 256 x 14 x 14
-        # ->
-        # 256 x 2 x 2
+        self.adaptive_pool_size = adaptive_pool_size
         self.avgpool = nn.AdaptiveAvgPool2d(
-            (2, 2)
+            adaptive_pool_size
         )
+
+        flatten_dim = 256 * adaptive_pool_size[0] * adaptive_pool_size[1]
 
         # Classification head
         self.classifier = nn.Sequential(
 
             nn.Flatten(),
 
-            # 256 * 2 * 2 = 1024
             nn.Linear(
-                256 * 2 * 2,
+                flatten_dim,
                 256,
             ),
 

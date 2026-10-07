@@ -1,0 +1,4 @@
+lesion_id,image_id,dx,dx_type,age,sex,localization,image_path,split,true_idx,pred_idx,true_class,pred_class,confidence,is_correct,error_pair,prob_akiec,prob_bcc,prob_bkl,prob_df,prob_mel,prob_nv,prob_vasc
+HAM_0001443,ISIC_0025804,bkl,consensus,50.0,male,lower extremity,data/raw/HAM10000_images_part_1/ISIC_0025804.jpg,test,2,5,bkl,nv,0.8847041,False,bkl → nv,0.006040135,0.013011527,0.011169851,0.022074046,0.012149418,0.8847041,0.05085085
+HAM_0000825,ISIC_0034186,bkl,consensus,,unknown,unknown,data/raw/HAM10000_images_part_2/ISIC_0034186.jpg,test,2,1,bkl,bcc,0.86645186,False,bkl → bcc,0.01801786,0.86645186,0.037134074,0.0054800827,0.02685736,0.004327644,0.041731138
+HAM_0003484,ISIC_0028003,mel,histo,30.0,male,lower extremity,data/raw/HAM10000_images_part_1/ISIC_0028003.jpg,test,4,5,mel,nv,0.81900823,False,mel → nv,0.0158332,0.012907061,0.011930599,0.024809318,0.053987347,0.81900823,0.061524283

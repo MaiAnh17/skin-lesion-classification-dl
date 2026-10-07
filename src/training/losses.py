@@ -57,11 +57,17 @@ def compute_class_weights(
 
 def get_weighted_cross_entropy_loss(
     class_weights,
+    label_smoothing: float = 0.0,
+    soften: bool = False,
 ):
     """
     Weighted CrossEntropyLoss for imbalanced classification.
+    Optionally softens weights via square root and adds label smoothing.
     """
+    if soften:
+        class_weights = torch.sqrt(class_weights)
 
     return nn.CrossEntropyLoss(
-        weight=class_weights
+        weight=class_weights,
+        label_smoothing=label_smoothing,
     )
