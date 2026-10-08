@@ -113,26 +113,37 @@ class HAM10000Dataset(Dataset):
     def __len__(self):
         return len(self.df)
 
-    def _resolve_image_path(
-        self,
-        stored_path,
-    ):
+    def _resolve_image_path(self, stored_path, image_id=None):
+        """Resolve existing paths or find images after moving the project.
+
+        Does not rewrite split CSVs or change their row order/labels.
         """
-        Resolve path stored in metadata.
+        if pd.notna(stored_path) and str(stored_path).strip():
+            raw = Path(str(stored_path))
+            candidates = [raw]
+            if not raw.is_absolute():
+                candidates.extend([
+                    self.project_root / raw,
+                    self.project_root / "data" / "raw" / raw,
+                ])
+            for candidate in candidates:
+                if candidate.is_file():
+                    return candidate
 
-        Supports both relative and absolute paths.
-        """
-
-        image_path = Path(
-            stored_path
-        )
-
-        if image_path.is_absolute():
-            return image_path
-
-        return (
-            self.project_root
-            / image_path
+        if image_id is None:
+            raise FileNotFoundError(f"Image path no longer exists: {stored_path}")
+        image_id = str(image_id).strip()
+        raw_dir = self.project_root / "data" / "raw"
+        for base in (raw_dir / "HAM10000_images_part_1",
+                     raw_dir / "HAM10000_images_part_2", raw_dir):
+            for extension in (".jpg", ".jpeg", ".png"):
+                candidate = base / f"{image_id}{extension}"
+                if candidate.is_file():
+                    return candidate
+        raise FileNotFoundError(
+            f"Image {image_id} not found. Checked stored_path={stored_path!r} "
+            f"and standard HAM10000 folders in {raw_dir}. "
+            "Keep the existing CSV and place images in data/raw."
         )
 
     def __getitem__(
@@ -143,7 +154,7 @@ class HAM10000Dataset(Dataset):
 
         image_path = (
             self._resolve_image_path(
-                row["image_path"]
+                row["image_path"], image_id=row["image_id"]
             )
         )
 

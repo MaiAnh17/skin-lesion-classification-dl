@@ -10,6 +10,8 @@ from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 
+from src.checkpoint_io import load_model
+
 from .metrics import (
     classification_report_dataframe,
     compute_classification_metrics,
@@ -83,10 +85,10 @@ class HAM10000EvaluationDataset(Dataset):
     def _resolve_image_path(self, row: pd.Series) -> Path:
         if "image_path" in self.df.columns and pd.notna(row.get("image_path")):
             p = Path(str(row["image_path"]))
-            if not p.is_absolute():
-                p = self.data_root / p
-            if p.exists():
-                return p
+            candidates = [p] if p.is_absolute() else [p, self.data_root / p, self.data_root.parent.parent / p]
+            for candidate in candidates:
+                if candidate.is_file():
+                    return candidate
 
         image_id = str(row["image_id"])
         candidates = [
@@ -143,60 +145,10 @@ def create_test_loader(
     )
 
 
-def _extract_state_dict(checkpoint):
-    """
-    Support either:
-    - raw model state_dict
-    - {'model_state_dict': ...}
-    - {'state_dict': ...}
-    """
-    if isinstance(checkpoint, dict):
-        if "model_state_dict" in checkpoint:
-            return checkpoint["model_state_dict"]
-        if "state_dict" in checkpoint:
-            return checkpoint["state_dict"]
-
-    return checkpoint
-
-
-def load_checkpoint(
-    model: torch.nn.Module,
-    checkpoint_path: str | Path,
-    device: torch.device,
-    strict: bool = True,
-) -> torch.nn.Module:
-    """Load a saved best checkpoint without retraining."""
-    checkpoint_path = Path(checkpoint_path)
-
-    if not checkpoint_path.exists():
-        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
-
-    try:
-        checkpoint = torch.load(
-            checkpoint_path,
-            map_location=device,
-            weights_only=True,
-        )
-    except TypeError:
-        checkpoint = torch.load(
-            checkpoint_path,
-            map_location=device,
-        )
-
-    state_dict = _extract_state_dict(checkpoint)
-
-    # Support checkpoints saved from DataParallel.
-    if isinstance(state_dict, dict) and any(k.startswith("module.") for k in state_dict):
-        state_dict = {
-            k.replace("module.", "", 1): v
-            for k, v in state_dict.items()
-        }
-
-    model.load_state_dict(state_dict, strict=strict)
-    model = model.to(device)
-    model.eval()
-
-    return model
+def load_checkpoint(model, checkpoint_path, device, strict=True):
+    if not strict:
+        raise ValueError("Checkpoint loading requires strict=True")
+    return load_model(model, checkpoint_path, device)
 
 
 @torch.inference_mode()
