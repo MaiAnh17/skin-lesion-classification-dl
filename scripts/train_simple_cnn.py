@@ -1,3 +1,4 @@
+import os
 from __future__ import annotations
 
 import random
@@ -62,6 +63,8 @@ def save_training_curves(history: pd.DataFrame, output_dir: Path) -> None:
 
 
 def main() -> None:
+    if os.environ.get("HAM10000_ALLOW_TRAINING") != "YES":
+        raise RuntimeError("Training disabled to protect existing checkpoints. Run scripts/evaluate.py instead.")
     config_path = PROJECT_ROOT / "configs" / "simple_cnn.yaml"
     with config_path.open("r", encoding="utf-8") as file:
         cfg = yaml.safe_load(file)
@@ -147,6 +150,10 @@ def main() -> None:
     )
 
     save_training_curves(history, PROJECT_ROOT / "outputs" / "figures")
+
+    if os.environ.get("HAM10000_TEST_AFTER_TRAINING") != "1":
+        print("Final test evaluation deferred to scripts/evaluate.py.")
+        return
 
     state_dict = torch.load(checkpoint_path, map_location=device, weights_only=True)
     model.load_state_dict(state_dict)

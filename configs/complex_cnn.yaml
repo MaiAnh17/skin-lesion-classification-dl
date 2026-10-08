@@ -29,7 +29,7 @@ data:
 
 training:
   seed: 42
-  epochs: 30
+  epochs: 25
 
   optimizer:
     name: adam
@@ -49,10 +49,12 @@ training:
 loss:
   name: weighted_cross_entropy
   use_class_weights: true
+  soften_class_weights: true
+  label_smoothing: 0.05
 
 
 output:
   checkpoint_name: complex_cnn_best.pt
-  history_name: complex_cnn_training_history.csv
+  history_name: complex_cnn_refined_history.csv
   loss_figure_name: complex_cnn_loss_curve.png
   accuracy_figure_name: complex_cnn_accuracy_curve.png

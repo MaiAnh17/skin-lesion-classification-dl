@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 import random
@@ -22,6 +23,8 @@ from src.training.losses import compute_class_weights, get_weighted_cross_entrop
 from src.training.train import fit, evaluate_one_epoch
 
 def main():
+    if os.environ.get("HAM10000_ALLOW_TRAINING") != "YES":
+        raise RuntimeError("Training disabled to protect existing checkpoints. Run scripts/evaluate.py instead.")
     SEED = 42
     random.seed(SEED)
     np.random.seed(SEED)
@@ -99,7 +102,7 @@ def main():
         patience=2,
     )
 
-    checkpoint_path = checkpoints_dir / "transfer_resnet18_refined_best.pt"
+    checkpoint_path = checkpoints_dir / "transfer_resnet18_best.pt"
     history_path = metrics_dir / "transfer_resnet18_refined_history.csv"
 
     print("\nStarting training for Refined Transfer Learning ResNet-18...", flush=True)

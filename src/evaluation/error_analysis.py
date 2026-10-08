@@ -12,27 +12,22 @@ HAM10000_CLASSES = ["akiec", "bcc", "bkl", "df", "mel", "nv", "vasc"]
 CLASS_TO_IDX = {c:i for i,c in enumerate(HAM10000_CLASSES)}
 IDX_TO_CLASS = {i:c for c,i in CLASS_TO_IDX.items()}
 
+from src.checkpoint_io import read_state_dict
+
+
 def load_state_dict_flexible(checkpoint_path, map_location="cpu"):
-    checkpoint_path = Path(checkpoint_path)
-    if not checkpoint_path.exists():
-        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
-    try:
-        obj = torch.load(checkpoint_path, map_location=map_location, weights_only=True)
-    except TypeError:
-        obj = torch.load(checkpoint_path, map_location=map_location)
-    if isinstance(obj, Mapping):
-        for key in ("model_state_dict", "state_dict", "model"):
-            if key in obj and isinstance(obj[key], Mapping):
-                obj = obj[key]
-                break
-    if any(str(k).startswith("module.") for k in obj.keys()):
-        obj = {str(k).replace("module.", "", 1):v for k,v in obj.items()}
-    return obj
+    # Legacy signature retained for notebook compatibility.
+    # Weights are loaded on CPU then moved with the model.
+    return read_state_dict(checkpoint_path)
+
 
 def load_model_weights(model, checkpoint_path, device, strict=True):
-    state = load_state_dict_flexible(checkpoint_path, device)
-    model.load_state_dict(state, strict=strict)
+    if not strict:
+        raise ValueError("Checkpoint loading must use strict=True")
+    state = read_state_dict(checkpoint_path)
+    model.load_state_dict(state, strict=True)
     return model.to(device).eval()
+
 
 def resolve_image_path(row: pd.Series, data_root, search_dirs=None):
     data_root = Path(data_root)

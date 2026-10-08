@@ -89,6 +89,10 @@ def main():
     # IMPORTANT:
     # pretrained=False prevents downloading ImageNet weights during evaluation.
     # The saved project checkpoints replace all model weights immediately.
+    architecture = cfg.get("model_architecture", {})
+    complex_cfg = architecture.get("complex_cnn", {})
+    resnet_cfg = architecture.get("resnet18", {})
+
     models = {
         "Simple CNN": SimpleCNN(
             num_classes=num_classes,
@@ -96,16 +100,21 @@ def main():
         ),
         "Complex CNN": ComplexCNN(
             num_classes=num_classes,
+            dropout=float(complex_cfg.get("classifier_dropout", 0.4)),
+            block_dropout=complex_cfg.get("block_dropout", [0.0] * 4),
+            adaptive_pool_size=tuple(complex_cfg.get("adaptive_pool_size", [4, 4])),
         ),
         "ResNet18 Transfer": TransferLearningResNet18(
             num_classes=num_classes,
-            dropout=0.3,
+            dropout=float(resnet_cfg.get("dropout", 0.3)),
+            hidden_dim=int(resnet_cfg.get("hidden_dim", 256)),
             pretrained=False,
             freeze_backbone=True,
         ),
         "ResNet18 Fine-Tuned": TransferLearningResNet18(
             num_classes=num_classes,
-            dropout=0.3,
+            dropout=float(resnet_cfg.get("dropout", 0.3)),
+            hidden_dim=int(resnet_cfg.get("hidden_dim", 256)),
             pretrained=False,
             freeze_backbone=False,
         ),
@@ -117,6 +126,17 @@ def main():
         "ResNet18 Transfer": cfg["models"]["transfer_resnet18"]["checkpoint"],
         "ResNet18 Fine-Tuned": cfg["models"]["fine_tuned_resnet18"]["checkpoint"],
     }
+
+    missing = [
+        str(PROJECT_ROOT / relative_path)
+        for relative_path in checkpoint_map.values()
+        if not (PROJECT_ROOT / relative_path).is_file()
+    ]
+    if missing:
+        raise FileNotFoundError(
+            "Required checkpoint(s) missing; no training has been started:\n"
+            + "\n".join(missing)
+        )
 
     for model_name, relative_path in checkpoint_map.items():
         models[model_name] = load_checkpoint(

@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 import random
@@ -18,6 +19,7 @@ import torch_directml
 from src.data.dataset import HAM10000Dataset, HAM10000_CLASSES
 from src.data.preprocessing import get_eval_transform
 from src.data.augmentation import get_train_transform
+from src.checkpoint_io import read_state_dict
 from src.models.transfer_learning import TransferLearningResNet18
 from src.models.fine_tuning import configure_resnet18_fine_tuning, count_trainable_parameters
 from src.training.losses import compute_class_weights, get_weighted_cross_entropy_loss
@@ -25,6 +27,8 @@ from src.training.train import fit, evaluate_one_epoch
 
 
 def main():
+    if os.environ.get("HAM10000_ALLOW_TRAINING") != "YES":
+        raise RuntimeError("Training disabled to protect existing checkpoints. Run scripts/evaluate.py instead.")
     SEED = 42
     random.seed(SEED)
     np.random.seed(SEED)
@@ -62,18 +66,21 @@ def main():
     model = TransferLearningResNet18(
         num_classes=7,
         dropout=0.3,
-        pretrained=True,
+        pretrained=False,
         freeze_backbone=True,
         hidden_dim=256,
     )
 
     # 2. Load the best refined Transfer Learning checkpoint
-    transfer_ckpt_path = checkpoints_dir / "transfer_resnet18_refined_best.pt"
+    transfer_ckpt_path = checkpoints_dir / "transfer_resnet18_best.pt"
     if not transfer_ckpt_path.exists():
-        transfer_ckpt_path = checkpoints_dir / "transfer_resnet18_best.pt"
+        raise FileNotFoundError(
+            f"Missing refined transfer checkpoint: {transfer_ckpt_path}. "
+            "Do not substitute the original one-layer classifier checkpoint."
+        )
     
     print(f"Loading base transfer weights from: {transfer_ckpt_path.name}...", flush=True)
-    state = torch.load(transfer_ckpt_path, map_location="cpu", weights_only=False)
+    state = read_state_dict(transfer_ckpt_path)
     model.load_state_dict(state)
     print("Base transfer weights loaded successfully.", flush=True)
 
@@ -108,7 +115,7 @@ def main():
         min_lr=1e-7,
     )
 
-    checkpoint_path = checkpoints_dir / "fine_tuned_resnet18_refined_best.pt"
+    checkpoint_path = checkpoints_dir / "fine_tuned_resnet18_best.pt"
     history_path = metrics_dir / "fine_tuned_resnet18_refined_history.csv"
 
     print("\nStarting Fine-Tuning Training for ResNet-18 (Layer4 + 2-layer FC)...", flush=True)
@@ -126,8 +133,12 @@ def main():
         history_path=history_path,
     )
 
+    if os.environ.get("HAM10000_TEST_AFTER_TRAINING") != "1":
+        print("Final test evaluation deferred to scripts/evaluate.py.")
+        return
+
     print("\nLoading best fine-tuned model for test evaluation...", flush=True)
-    best_state = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    best_state = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
     model.load_state_dict(best_state)
     model.to(dml)
 

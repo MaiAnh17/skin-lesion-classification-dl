@@ -12,6 +12,7 @@ model:
   name: resnet18
   pretrained: true
   dropout: 0.3
+  hidden_dim: 256
   checkpoint: outputs/checkpoints/transfer_resnet18_best.pt
 
 fine_tuning:
@@ -53,6 +54,6 @@ training:
 
 outputs:
   checkpoint: outputs/checkpoints/fine_tuned_resnet18_best.pt
-  history: outputs/metrics/fine_tuned_resnet18_training_history.csv
+  history: outputs/metrics/fine_tuned_resnet18_refined_history.csv
   loss_figure: outputs/figures/fine_tuned_resnet18_loss_curve.png
   accuracy_figure: outputs/figures/fine_tuned_resnet18_accuracy_curve.png

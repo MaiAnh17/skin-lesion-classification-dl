@@ -16,3 +16,12 @@ checkpoints:
   Complex CNN: complex_cnn_best.pt
   Transfer Learning ResNet18: transfer_resnet18_best.pt
   Fine-tuned ResNet18: fine_tuned_resnet18_best.pt
+
+model_architecture:
+  complex_cnn:
+    classifier_dropout: 0.4
+    block_dropout: [0.0, 0.0, 0.0, 0.0]
+    adaptive_pool_size: [4, 4]
+  resnet18:
+    dropout: 0.3
+    hidden_dim: 256

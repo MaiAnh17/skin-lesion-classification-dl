@@ -7,6 +7,7 @@ model:
   pretrained: true
   freeze_backbone: true
   dropout: 0.3
+  hidden_dim: 256
 
 input:
   image_size: 224
@@ -17,7 +18,7 @@ training:
   num_epochs: 20
   learning_rate: 0.001
   weight_decay: 0.0001
-  early_stopping_patience: 5
+  early_stopping_patience: 6
 
 scheduler:
   name: ReduceLROnPlateau
@@ -27,6 +28,11 @@ scheduler:
 
 outputs:
   checkpoint: outputs/checkpoints/transfer_resnet18_best.pt
-  history: outputs/metrics/transfer_resnet18_training_history.csv
+  history: outputs/metrics/transfer_resnet18_refined_history.csv
   loss_figure: outputs/figures/transfer_resnet18_loss_curve.png
   accuracy_figure: outputs/figures/transfer_resnet18_accuracy_curve.png
+
+loss:
+  name: weighted_cross_entropy
+  soften_class_weights: true
+  label_smoothing: 0.05

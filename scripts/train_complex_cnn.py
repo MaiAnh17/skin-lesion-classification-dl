@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 import random
@@ -19,6 +20,8 @@ from src.training.losses import compute_class_weights, get_weighted_cross_entrop
 from src.training.train import fit, evaluate_one_epoch
 
 def main():
+    if os.environ.get("HAM10000_ALLOW_TRAINING") != "YES":
+        raise RuntimeError("Training disabled to protect existing checkpoints. Run scripts/evaluate.py instead.")
     # 1. Reproducibility & Threads
     SEED = 42
     random.seed(SEED)
@@ -101,7 +104,7 @@ def main():
         patience=3,
     )
 
-    checkpoint_path = checkpoints_dir / "complex_cnn_refined_best.pt"
+    checkpoint_path = checkpoints_dir / "complex_cnn_best.pt"
     history_path = metrics_dir / "complex_cnn_refined_history.csv"
 
     print("\nStarting training for Refined Complex CNN (Fix A)...")
@@ -118,6 +121,10 @@ def main():
         early_stopping_patience=7,
         history_path=history_path,
     )
+
+    if os.environ.get("HAM10000_TEST_AFTER_TRAINING") != "1":
+        print("Final test evaluation deferred to scripts/evaluate.py.")
+        return
 
     # 7. Evaluate Best Model on Test Set
     print("\nLoading best model for test evaluation...")

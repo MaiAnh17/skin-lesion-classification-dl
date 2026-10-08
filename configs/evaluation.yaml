@@ -34,3 +34,15 @@ outputs:
   metrics_dir: outputs/metrics
   figures_dir: outputs/figures
   confusion_dir: outputs/confusion_matrices
+
+model_architecture:
+  complex_cnn:
+    classifier_dropout: 0.4
+    block_dropout: [0.0, 0.0, 0.0, 0.0]
+    adaptive_pool_size: [4, 4]
+  resnet18:
+    dropout: 0.3
+    hidden_dim: 256
+
+checkpoint_policy:
+  missing: error

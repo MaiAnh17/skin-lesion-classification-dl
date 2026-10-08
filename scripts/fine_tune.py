@@ -1,3 +1,4 @@
+import os
 from __future__ import annotations
 
 import random
@@ -16,6 +17,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.checkpoint_io import read_state_dict
 from src.data.augmentation import get_train_transform
 from src.data.dataset import HAM10000Dataset, HAM10000_CLASSES
 from src.data.preprocessing import get_eval_transform
@@ -78,6 +80,8 @@ def save_training_curves(history: pd.DataFrame, output_dir: Path) -> None:
 
 
 def main() -> None:
+    if os.environ.get("HAM10000_ALLOW_TRAINING") != "YES":
+        raise RuntimeError("Training disabled to protect existing checkpoints. Run scripts/evaluate.py instead.")
     config_path = PROJECT_ROOT / "configs" / "fine_tuning.yaml"
     with config_path.open("r", encoding="utf-8") as file:
         cfg = yaml.safe_load(file)
@@ -128,8 +132,14 @@ def main() -> None:
         hidden_dim=256,
     )
 
-    checkpoint = torch.load(transfer_checkpoint, map_location="cpu", weights_only=True)
-    model.load_state_dict(extract_state_dict(checkpoint), strict=True)
+    checkpoint = read_state_dict(transfer_checkpoint)
+    try:
+        model.load_state_dict(extract_state_dict(checkpoint), strict=True)
+    except RuntimeError as exc:
+        raise RuntimeError(
+            "Transfer checkpoint incompatible with hidden_dim=256. "
+            "Use transfer_resnet18_best.pt."
+        ) from exc
     model = configure_resnet18_fine_tuning(model).to(device)
 
     stats = count_trainable_parameters(model)
@@ -173,6 +183,10 @@ def main() -> None:
     )
 
     save_training_curves(history, PROJECT_ROOT / "outputs" / "figures")
+
+    if os.environ.get("HAM10000_TEST_AFTER_TRAINING") != "1":
+        print("Final test evaluation deferred to scripts/evaluate.py.")
+        return
 
     best_state = torch.load(checkpoint_path, map_location=device, weights_only=True)
     model.load_state_dict(best_state)
